@@ -1,25 +1,27 @@
 repos:
-- repo: local
-  hooks:
-  - id: sync-versions
-    name: Sync dependency versions
-    entry: python scripts/sync_versions.py
-    language: python
-    files: ^(pyproject\.toml|\.pre-commit-config\.yaml)$
-    additional_dependencies:
-    - tomli>=2.0.1
-    - tomli-w>=1.0.0
-    - pyyaml>=6.0.1
-- repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.3.0
-  hooks:
-  - id: ruff
-  - id: ruff-format
-- repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v1.14.0
-  hooks:
-  - id: mypy
-    exclude: (\.venv|venv|\.git|\.eggs|\.mypy_cache|build|dist)
-    additional_dependencies:
-    - types-PyYAML
-    - types-click
+  - repo: local
+    hooks:
+      - id: sync-versions
+        name: Sync dependency versions
+        entry: python scripts/sync_versions.py
+        language: python
+        files: ^(pyproject\.toml|\.pre-commit-config\.yaml)$
+        additional_dependencies:
+          - tomli>=2.0.1
+          - tomli-w>=1.0.0
+          - pyyaml>=6.0.1
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.0
+    hooks:
+      - id: mypy
+        exclude: (\.venv|venv|\.git|\.eggs|\.mypy_cache|build|dist)
+        additional_dependencies:
+          - types-PyYAML
+          - types-click
+          - types-Pillow

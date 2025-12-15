@@ -3,12 +3,12 @@ import os
 import subprocess
 import sys
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional
+from typing import Any
 
 
 def get_immediate_subdirectories(
-    full_path: str, ignore: Optional[List[str]] = None
-) -> List[str]:
+    full_path: str, ignore: list[str] | None = None
+) -> list[str]:
     """
     Get all immediate sub-directories for a certain full path.
 

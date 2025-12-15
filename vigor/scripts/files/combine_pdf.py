@@ -2,19 +2,18 @@
 
 import os
 import re
-from typing import List, Union
 
 import click
 from pypdf import PdfWriter
 
 
-def natural_sort_key(s: str) -> List[Union[int, str]]:
+def natural_sort_key(s: str) -> list[int | str]:
     """
     Return a key for natural sorting that handles numbers within text.
     For example: ['doc_1.pdf', 'doc_2.pdf', 'doc_10.pdf'] will sort correctly.
     """
 
-    def try_int(text: str) -> Union[int, str]:
+    def try_int(text: str) -> int | str:
         try:
             return int(text)
         except ValueError:

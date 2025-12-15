@@ -2,7 +2,6 @@
 
 import os
 import re
-from typing import List, Union
 
 import click
 from PIL import Image
@@ -10,13 +9,13 @@ from PIL import Image
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif")
 
 
-def natural_sort_key(s: str) -> List[Union[int, str]]:
+def natural_sort_key(s: str) -> list[int | str]:
     """
     Return a key for natural sorting that handles numbers within text.
     For example: ['img_1.jpg', 'img_2.jpg', 'img_10.jpg'] will sort correctly.
     """
 
-    def try_int(text: str) -> Union[int, str]:
+    def try_int(text: str) -> int | str:
         try:
             return int(text)
         except ValueError:
@@ -66,7 +65,7 @@ def image_to_pdf(image_dir: str, output: str, dry_run: bool) -> None:
             return
 
     image_paths = [os.path.join(image_dir, img) for img in images]
-    image_objects: List[Image.Image] = []
+    image_objects: list[Image.Image] = []
 
     try:
         for path in image_paths:

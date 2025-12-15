@@ -1,6 +1,6 @@
 import os
 import subprocess
-from typing import Any, List, Optional
+from typing import Any
 
 from vigor.utils import CommandRunner
 
@@ -30,7 +30,7 @@ class Compose(CommandRunner):
 
         return super().run(*params, capture_output=True)
 
-    def generate_compose_file(self, files: List[str], env: Optional[str] = None) -> str:
+    def generate_compose_file(self, files: list[str], env: str | None = None) -> str:
         """
         Generates aggregated Compose file using Docker Compose's built-in config
         command.

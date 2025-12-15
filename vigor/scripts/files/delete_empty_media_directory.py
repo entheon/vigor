@@ -3,11 +3,11 @@
 import os
 import shutil
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import Optional
 
 import click
 
-MEDIA_EXTENSIONS: Set[str] = {
+MEDIA_EXTENSIONS: set[str] = {
     ".mp4",
     ".avi",
     ".mkv",
@@ -31,7 +31,7 @@ MEDIA_EXTENSIONS: Set[str] = {
 class DirectoryNode:
     path: str
     has_direct_media: bool = False
-    children: Dict[str, "DirectoryNode"] = field(default_factory=dict)
+    children: dict[str, "DirectoryNode"] = field(default_factory=dict)
     parent: Optional["DirectoryNode"] = None
 
     @property
@@ -80,8 +80,8 @@ def build_directory_tree(root_dir: str) -> DirectoryNode:
     return root_node
 
 
-def find_empty_branches(node: DirectoryNode, results: List[DirectoryNode]) -> None:
-    if not node.has_any_media and node.children:
+def find_empty_branches(node: DirectoryNode, results: list[DirectoryNode]) -> None:
+    if not node.has_any_media:
         results.append(node)
         return
 
@@ -89,12 +89,12 @@ def find_empty_branches(node: DirectoryNode, results: List[DirectoryNode]) -> No
         find_empty_branches(child, results)
 
 
-def consolidate_deletions(candidates: List[DirectoryNode]) -> List[DirectoryNode]:
+def consolidate_deletions(candidates: list[DirectoryNode]) -> list[DirectoryNode]:
     if not candidates:
         return []
 
     candidate_paths = {node.path for node in candidates}
-    consolidated: List[DirectoryNode] = []
+    consolidated: list[DirectoryNode] = []
 
     for node in candidates:
         parent = node.parent
@@ -143,7 +143,7 @@ def delete_empty_media_directory(root_dir: str, dry_run: bool) -> None:
     root_dir = os.path.abspath(root_dir)
     tree = build_directory_tree(root_dir)
 
-    candidates: List[DirectoryNode] = []
+    candidates: list[DirectoryNode] = []
     for child in tree.children.values():
         find_empty_branches(child, candidates)
 

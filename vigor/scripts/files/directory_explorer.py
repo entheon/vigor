@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 
 import os
-from typing import List
 
 import click
 from hurry.filesize import size
 
 
-def print_directory(directory_path: str, directory_files: List[str]) -> None:
+def print_directory(directory_path: str, directory_files: list[str]) -> None:
     total_size = 0
 
     click.echo("=" * 60)
