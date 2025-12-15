@@ -2,63 +2,84 @@
 
 import os
 import re
-from typing import List, Union
 
 import click
 from PIL import Image
 
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif")
 
-def natural_sort_key(s: str) -> List[Union[int, str]]:
+
+def natural_sort_key(s: str) -> list[int | str]:
     """
     Return a key for natural sorting that handles numbers within text.
-    For example: ['asdf_1.jpg', 'asdf_2.jpg', 'asdf_10.jpg'] will sort correctly.
-
-    This splits on number sequences and converts them to integers while keeping
-    the surrounding text intact for comparison.
+    For example: ['img_1.jpg', 'img_2.jpg', 'img_10.jpg'] will sort correctly.
     """
 
-    def try_int(text: str) -> Union[int, str]:
+    def try_int(text: str) -> int | str:
         try:
             return int(text)
         except ValueError:
             return text.lower()
 
-    # Split on sequences of digits while keeping the digits
-    # This will turn "asdf_123.jpg" into ["asdf_", "123", ".jpg"]
     return [try_int(c) for c in re.split(r"(\d+)", s)]
 
 
 @click.command()
-@click.argument("image_dir")
-@click.option("--dry-run", is_flag=True, default=False, help="Dry Run")
-def image_to_pdf(image_dir: str, dry_run: bool) -> None:
+@click.argument("image_dir", type=click.Path(exists=True, file_okay=False))
+@click.option("--output", "-o", default="output.pdf", help="Output filename")
+@click.option(
+    "--dry-run", is_flag=True, default=False, help="Show files without converting"
+)
+def image_to_pdf(image_dir: str, output: str, dry_run: bool) -> None:
     """
-    Gathers all images in `image_dir`, sorted by name, then merges them into
-    a singular PDF, output to `image_dir` as well.
+    Converts all images in IMAGE_DIR to a single PDF file.
+
+    Images are sorted naturally (img_1.jpg, img_2.jpg, img_10.jpg).
+    Supports: PNG, JPG, JPEG, WebP, BMP, TIFF, GIF.
     """
-    # Step 1: Gather all images inside given directory
+    image_dir = os.path.abspath(image_dir)
     files = os.listdir(image_dir)
 
-    # Use natural sorting instead of regular sorting
     images = sorted(
-        [item for item in files if item.lower().endswith((".png", ".jpg", ".jpeg"))],
+        [item for item in files if item.lower().endswith(IMAGE_EXTENSIONS)],
         key=natural_sort_key,
     )
-    image_full_paths = [os.path.join(image_dir, image) for image in images]
 
-    print(f"Images to be merged are: {images}")
-
-    if dry_run or not images:
+    if not images:
+        click.echo("No image files found in directory.")
         return
 
-    # Finally merge and convert to PDF
-    data = [Image.open(path).convert("RGB") for path in image_full_paths]
-    output_path = os.path.join(image_dir, "output.pdf")
+    click.echo(f"Images to convert ({len(images)} files):")
+    for image_name in images:
+        click.echo(f"  {image_name}")
 
-    # Weird PIL way of saving to PDF ...
-    data[0].save(output_path, "PDF", save_all=True, append_images=data[1:])
+    if dry_run:
+        click.echo("\nDry run mode - no files were converted.")
+        return
 
-    print(f"Merged PDF saved at: {output_path}")
+    output_path = os.path.join(image_dir, output)
+
+    if os.path.exists(output_path):
+        if not click.confirm(f"\n'{output}' already exists. Overwrite?"):
+            click.echo("Operation cancelled.")
+            return
+
+    image_paths = [os.path.join(image_dir, name) for name in images]
+    image_objects: list[Image.Image] = []
+
+    try:
+        for path in image_paths:
+            image = Image.open(path).convert("RGB")
+            image_objects.append(image)
+
+        image_objects[0].save(
+            output_path, "PDF", save_all=True, append_images=image_objects[1:]
+        )
+
+        click.echo(f"\nPDF saved: {output_path}")
+    finally:
+        for image in image_objects:
+            image.close()
 
 
 if __name__ == "__main__":
