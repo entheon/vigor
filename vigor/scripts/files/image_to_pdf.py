@@ -50,8 +50,8 @@ def image_to_pdf(image_dir: str, output: str, dry_run: bool) -> None:
         return
 
     click.echo(f"Images to convert ({len(images)} files):")
-    for img in images:
-        click.echo(f"  {img}")
+    for image_name in images:
+        click.echo(f"  {image_name}")
 
     if dry_run:
         click.echo("\nDry run mode - no files were converted.")
@@ -64,13 +64,13 @@ def image_to_pdf(image_dir: str, output: str, dry_run: bool) -> None:
             click.echo("Operation cancelled.")
             return
 
-    image_paths = [os.path.join(image_dir, img) for img in images]
+    image_paths = [os.path.join(image_dir, name) for name in images]
     image_objects: list[Image.Image] = []
 
     try:
         for path in image_paths:
-            img = Image.open(path).convert("RGB")
-            image_objects.append(img)
+            image = Image.open(path).convert("RGB")
+            image_objects.append(image)
 
         image_objects[0].save(
             output_path, "PDF", save_all=True, append_images=image_objects[1:]
@@ -78,8 +78,8 @@ def image_to_pdf(image_dir: str, output: str, dry_run: bool) -> None:
 
         click.echo(f"\nPDF saved: {output_path}")
     finally:
-        for img in image_objects:
-            img.close()
+        for image in image_objects:
+            image.close()
 
 
 if __name__ == "__main__":
