@@ -1,63 +1,54 @@
-#!/usr/bin/env python
-import argparse
+#!/usr/bin/env python3
+
 import os
 from typing import List
 
+import click
 from hurry.filesize import size
 
 
-def parse_args() -> str:
-    parser = argparse.ArgumentParser(description="Directory Explorer")
-    parser.add_argument(
-        "root_dir", help="Absolute path to root directory to explore.", type=str
-    )
-
-    args = parser.parse_args()
-    return str(args.root_dir)
-
-
-def process_request(root_dir: str) -> None:
-    """
-    Processes CLI calls.
-
-    Args:
-        root_dir (str): Root directory to explore and print information for.
-    """
-    for item in os.walk(root_dir):
-        # each item is 3-tuple of (dirpath, dirnames, filenames)
-        current_path = item[0]
-        current_directories = item[1]
-        current_files = item[2]
-
-        print_directory(current_path, current_files)
-
-        for directory in current_directories:
-            process_request(directory)
-
-
 def print_directory(directory_path: str, directory_files: List[str]) -> None:
-    """
-    Prints all files and their sizes for a given directory.
-
-    Args:
-        directory_path (str): Path to directory.
-        directory_files (List[str]): List of files found inside the directory.
-    """
     total_size = 0
 
-    print("=====================================")
-    print(f"Directory: {directory_path}")
+    click.echo("=" * 60)
+    click.echo(f"Directory: {directory_path}")
 
     for file_name in directory_files:
         file_path = os.path.join(directory_path, file_name)
-        current_size = os.path.getsize(file_path)
-        print(f"File: {file_path} | Size: {size(current_size)}")
-        total_size += current_size
+        try:
+            current_size = os.path.getsize(file_path)
+            click.echo(f"  {file_name} | {size(current_size)}")
+            total_size += current_size
+        except OSError:
+            click.echo(f"  {file_name} | (unable to read)")
 
-    print(f"Total Size: {size(total_size)}")
+    click.echo(f"Total: {size(total_size)}")
+
+
+@click.command()
+@click.argument("root_dir", type=click.Path(exists=True, file_okay=False))
+def directory_explorer(root_dir: str) -> None:
+    """
+    Walks through ROOT_DIR and displays all files with their sizes.
+    """
+    root_dir = os.path.abspath(root_dir)
+    total_size = 0
+    total_files = 0
+
+    for dirpath, _, filenames in os.walk(root_dir):
+        if filenames:
+            print_directory(dirpath, filenames)
+            for file_name in filenames:
+                file_path = os.path.join(dirpath, file_name)
+                try:
+                    total_size += os.path.getsize(file_path)
+                    total_files += 1
+                except OSError:
+                    pass
+
+    click.echo("=" * 60)
+    click.echo(f"Grand Total: {total_files} files, {size(total_size)}")
 
 
 if __name__ == "__main__":
-    args = parse_args()
-
-    process_request(*args)
+    directory_explorer()

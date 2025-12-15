@@ -1,30 +1,65 @@
 #!/usr/bin/env python3
 
 import os
+import re
+from typing import List, Union
 
 import click
 from pypdf import PdfWriter
 
 
+def natural_sort_key(s: str) -> List[Union[int, str]]:
+    """
+    Return a key for natural sorting that handles numbers within text.
+    For example: ['doc_1.pdf', 'doc_2.pdf', 'doc_10.pdf'] will sort correctly.
+    """
+
+    def try_int(text: str) -> Union[int, str]:
+        try:
+            return int(text)
+        except ValueError:
+            return text.lower()
+
+    return [try_int(c) for c in re.split(r"(\d+)", s)]
+
+
 @click.command()
-@click.argument("pdf_dir")
-@click.option("--dry-run", is_flag=True, default=False, help="Dry Run")
-def combine_pdf(pdf_dir: str, dry_run: bool) -> None:
+@click.argument("pdf_dir", type=click.Path(exists=True, file_okay=False))
+@click.option("--output", "-o", default="combined.pdf", help="Output filename")
+@click.option(
+    "--dry-run", is_flag=True, default=False, help="Show files without merging"
+)
+def combine_pdf(pdf_dir: str, output: str, dry_run: bool) -> None:
     """
-    Gathers all pdfs in `pdf_dir`, sorted by name, then merges them into
-    a singular PDF, output to `pdf_dir` as well.
+    Merges all PDFs in PDF_DIR into a single PDF file.
+
+    PDFs are sorted naturally (doc_1.pdf, doc_2.pdf, doc_10.pdf).
     """
-    # Step 1: Gather all pdfs inside given directory
+    pdf_dir = os.path.abspath(pdf_dir)
     files = os.listdir(pdf_dir)
-    pdfs = sorted([item for item in files if item.lower().endswith(".pdf")])
+    pdfs = sorted(
+        [item for item in files if item.lower().endswith(".pdf")], key=natural_sort_key
+    )
 
-    print(f"PDFs to be merged are: {pdfs}")
-
-    if dry_run or not pdfs:
+    if not pdfs:
+        click.echo("No PDF files found in directory.")
         return
 
-    # Finally merge
-    output_path = os.path.join(pdf_dir, "combined.pdf")
+    click.echo(f"PDFs to merge ({len(pdfs)} files):")
+    for pdf in pdfs:
+        click.echo(f"  {pdf}")
+
+    if dry_run:
+        click.echo("\nDry run mode - no files were merged.")
+        return
+
+    output_path = os.path.join(pdf_dir, output)
+
+    if os.path.exists(output_path):
+        if not click.confirm(f"\n'{output}' already exists. Overwrite?"):
+            click.echo("Operation cancelled.")
+            return
+
     merger = PdfWriter()
     for pdf in pdfs:
         merger.append(os.path.join(pdf_dir, pdf))
@@ -32,7 +67,7 @@ def combine_pdf(pdf_dir: str, dry_run: bool) -> None:
     merger.write(output_path)
     merger.close()
 
-    print(f"Merged PDF saved at: {output_path}")
+    click.echo(f"\nMerged PDF saved: {output_path}")
 
 
 if __name__ == "__main__":

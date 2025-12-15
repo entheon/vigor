@@ -1,31 +1,51 @@
 #!/usr/bin/env python3
 
 import os
-from typing import List, Tuple
+import shutil
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
 
 import click
 
-to_delete: List[Tuple[str, str]] = []
-
-# Video file extensions
-MEDIA_EXTENSIONS = {
-    # Videos
-    '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg',
-    '.mpeg', '.3gp', '.ts', '.mts', '.m2ts', '.vob', '.ogv'
+MEDIA_EXTENSIONS: Set[str] = {
+    ".mp4",
+    ".avi",
+    ".mkv",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".webm",
+    ".m4v",
+    ".mpg",
+    ".mpeg",
+    ".3gp",
+    ".ts",
+    ".mts",
+    ".m2ts",
+    ".vob",
+    ".ogv",
 }
 
 
-def contains_video_files(directory: str, recursive_check: bool = False) -> bool:
-    """
-    Check if a directory contains any video files.
+@dataclass
+class DirectoryNode:
+    path: str
+    has_direct_media: bool = False
+    children: Dict[str, "DirectoryNode"] = field(default_factory=dict)
+    parent: Optional["DirectoryNode"] = None
 
-    Args:
-        directory (str): Path to the directory to check
-        recursive_check (bool): Whether to check subdirectories recursively for video files
+    @property
+    def has_any_media(self) -> bool:
+        if self.has_direct_media:
+            return True
+        return any(child.has_any_media for child in self.children.values())
 
-    Returns:
-        bool: True if directory contains video files, False otherwise
-    """
+    @property
+    def is_empty(self) -> bool:
+        return not os.listdir(self.path) if os.path.exists(self.path) else True
+
+
+def has_media_files(directory: str) -> bool:
     try:
         for item in os.listdir(directory):
             item_path = os.path.join(directory, item)
@@ -33,127 +53,128 @@ def contains_video_files(directory: str, recursive_check: bool = False) -> bool:
                 _, ext = os.path.splitext(item.lower())
                 if ext in MEDIA_EXTENSIONS:
                     return True
-            elif os.path.isdir(item_path) and recursive_check:
-                # Recursively check subdirectories if flag is enabled
-                if contains_video_files(item_path, recursive_check=True):
-                    return True
     except (OSError, PermissionError):
-        # If we can't read the directory, assume it contains video to be safe
-        return True
+        pass
     return False
 
 
-def scan_directory(root_dir: str, recursive: bool = False, recursive_check: bool = False) -> None:
-    """
-    Scan directory for empty video directories and add them to to_delete list.
+def build_directory_tree(root_dir: str) -> DirectoryNode:
+    root_node = DirectoryNode(path=root_dir, has_direct_media=has_media_files(root_dir))
 
-    Args:
-        root_dir (str): Root directory to scan
-        recursive (bool): Whether to scan recursively
-        recursive_check (bool): Whether to check subdirectories recursively for video files
-    """
-    try:
-        for item in os.listdir(root_dir):
-            item_path = os.path.join(root_dir, item)
+    def build_subtree(node: DirectoryNode) -> None:
+        try:
+            for item in os.listdir(node.path):
+                item_path = os.path.join(node.path, item)
+                if os.path.isdir(item_path):
+                    child_node = DirectoryNode(
+                        path=item_path,
+                        has_direct_media=has_media_files(item_path),
+                        parent=node,
+                    )
+                    node.children[item] = child_node
+                    build_subtree(child_node)
+        except (OSError, PermissionError):
+            pass
 
-            if os.path.isdir(item_path):
-                # Check if this directory contains video files
-                if not contains_video_files(item_path, recursive_check=recursive_check):
-                    # Check if directory is completely empty or only contains non-video files
-                    try:
-                        dir_contents = os.listdir(item_path)
-                        if not dir_contents:
-                            # Empty directory
-                            to_delete.append((item_path, "Empty directory"))
-                        else:
-                            # Directory with only non-video files
-                            desc = "No video files found (deep scan)" if recursive_check else "No video files found"
-                            to_delete.append((item_path, desc))
-                    except (OSError, PermissionError):
-                        pass
+    build_subtree(root_node)
+    return root_node
 
-                # If recursive, scan subdirectories
-                if recursive:
-                    scan_directory(item_path, recursive=True, recursive_check=recursive_check)
 
-    except (OSError, PermissionError) as e:
-        click.echo(f"Error scanning directory {root_dir}: {e}", err=True)
+def find_empty_branches(node: DirectoryNode, results: List[DirectoryNode]) -> None:
+    if not node.has_any_media and node.children:
+        results.append(node)
+        return
+
+    for child in node.children.values():
+        find_empty_branches(child, results)
+
+
+def consolidate_deletions(candidates: List[DirectoryNode]) -> List[DirectoryNode]:
+    if not candidates:
+        return []
+
+    candidate_paths = {node.path for node in candidates}
+    consolidated: List[DirectoryNode] = []
+
+    for node in candidates:
+        parent = node.parent
+        parent_is_candidate = False
+        while parent is not None:
+            if parent.path in candidate_paths:
+                parent_is_candidate = True
+                break
+            parent = parent.parent
+
+        if not parent_is_candidate:
+            consolidated.append(node)
+
+    return consolidated
+
+
+def count_subdirectories(node: DirectoryNode) -> int:
+    count = len(node.children)
+    for child in node.children.values():
+        count += count_subdirectories(child)
+    return count
+
+
+def get_deletion_reason(node: DirectoryNode) -> str:
+    if node.is_empty:
+        return "Empty directory"
+
+    subdir_count = count_subdirectories(node)
+    if subdir_count > 0:
+        return f"No media in tree ({subdir_count} subdirs)"
+    return "No media files"
 
 
 @click.command()
-@click.argument("root_dir")
-@click.option("--dry-run", is_flag=True, default=False, help="Dry Run")
+@click.argument("root_dir", type=click.Path(exists=True, file_okay=False))
 @click.option(
-    "-r",
-    "--recursive",
-    is_flag=True,
-    default=False,
-    help="Should recursively check sub-directories",
+    "--dry-run", is_flag=True, default=False, help="Show dirs without deleting"
 )
-@click.option(
-    "--deep",
-    is_flag=True,
-    default=False,
-    help="Recursively check subdirectories within each directory for video files",
-)
-def delete_empty_media_directory(root_dir: str, dry_run: bool, recursive: bool, deep: bool) -> None:
+def delete_empty_media_directory(root_dir: str, dry_run: bool) -> None:
     """
-    Finds folders in root_dir do not contain any video files and removes them.
+    Scans ROOT_DIR for directories without media files and suggests deletions.
 
-    Args:
-        root_dir (str): Root Directory to scan. Only looks at first level
-        subdirectories unless --recursive is used.
-
-    Options:
-        --dry-run: Show what would be deleted without actually deleting
-        -r/--recursive: Scan subdirectories recursively for empty directories
-        --deep: Check subdirectories within each directory for video files
+    Intelligently consolidates suggestions - if a parent and all children have
+    no media, only the parent is suggested for deletion.
     """
-    # Validate root directory
-    if not os.path.exists(root_dir):
-        click.echo(f"Error: Directory '{root_dir}' does not exist.", err=True)
+    root_dir = os.path.abspath(root_dir)
+    tree = build_directory_tree(root_dir)
+
+    candidates: List[DirectoryNode] = []
+    for child in tree.children.values():
+        find_empty_branches(child, candidates)
+
+    consolidated = consolidate_deletions(candidates)
+
+    if not consolidated:
+        click.echo("No empty media directories found.")
         return
 
-    if not os.path.isdir(root_dir):
-        click.echo(f"Error: '{root_dir}' is not a directory.", err=True)
-        return
-
-    # Clear the to_delete list in case of multiple runs
-    to_delete.clear()
-
-    # Scan for empty video directories
-    scan_directory(root_dir, recursive, deep)
-
-    if not to_delete:
-        click.echo("No empty video directories found.")
-        return
-
-    # Display what will be deleted
-    click.echo(f"Found {len(to_delete)} directories to delete:")
-    for dir_path, reason in to_delete:
-        click.echo(f"  {dir_path} - {reason}")
+    click.echo(f"Found {len(consolidated)} directories to delete:")
+    for node in consolidated:
+        reason = get_deletion_reason(node)
+        click.echo(f"  {node.path} - {reason}")
 
     if dry_run:
-        click.echo("\nDry run mode - no directories were actually deleted.")
+        click.echo("\nDry run mode - no directories were deleted.")
         return
 
-    # Ask for confirmation before deleting
-    if not click.confirm(f"\nProceed with deleting {len(to_delete)} directories?"):
+    if not click.confirm(f"\nProceed with deleting {len(consolidated)} directories?"):
         click.echo("Operation cancelled.")
         return
 
-    # Delete directories
     deleted_count = 0
-    for dir_path, reason in to_delete:
+    for node in consolidated:
         try:
-            # Use rmdir for empty directories, or handle non-empty ones
-            if os.path.exists(dir_path):
-                import shutil
-                shutil.rmtree(dir_path)
-                click.echo(f"Deleted: {dir_path}")
+            if os.path.exists(node.path):
+                shutil.rmtree(node.path)
+                click.echo(f"Deleted: {node.path}")
                 deleted_count += 1
         except OSError as e:
-            click.echo(f"Error deleting {dir_path}: {e}", err=True)
+            click.echo(f"Error deleting {node.path}: {e}", err=True)
 
     click.echo(f"\nSuccessfully deleted {deleted_count} directories.")
 
